@@ -1101,22 +1101,6 @@ def simu_fp_cn_draft(chr_len, min_len, max_len, all_copy_int, sample):
     
     return ['chr' + str(rand_chr + 1), str(rand_start), str(rand_start + rand_len), '2', sample]
 
-
-# In[ ]:
-
-
-
-
-
-# In[ ]:
-
-
-
-
-
-# In[1]:
-
-
 #embedding
 ###############################################
 #get input seq on ref from vcf
@@ -1578,3 +1562,77 @@ def get_sv_len_from_feature(line_list):
 
     return padded_len - zero_ctr
 
+
+def index_vcf(vcf_file, cur_valid_types):
+    sv_dict = dict()
+    
+    ###################################
+    f = pysam.VariantFile(vcf_file,'r')
+    
+    for count, rec in enumerate(f.fetch()):
+        #get sv_type
+        try:
+            sv_type = rec.info['SVTYPE']
+        except:
+            print("invalid sv type info")
+            continue
+    
+        #get sv length
+        if sv_type == 'INV':
+            sv_len = abs(rec.stop - rec.pos + 1)
+        else:
+            try:
+                sv_len = rec.info['SVLEN'][0]
+            except:
+                try:
+                    sv_len = rec.info['SVLEN']
+                except:
+                    sv_len = abs(rec.stop - rec.pos + 1)
+
+        if sv_type not in cur_valid_types: continue
+
+        if sv_type == "INS": cur_min_len, cur_max_len = 50, 500
+        elif sv_type == "DEL": cur_min_len, cur_max_len = 400, 2000
+        elif sv_type == "DUP": cur_min_len, cur_max_len = 400, 2000
+        elif sv_type == "INV": cur_min_len, cur_max_len = 50, 2000
+        
+        if sv_len < cur_min_len or sv_len > cur_max_len: continue
+            
+        if filters(rec, sv_type, True, sv_len):
+            continue
+    
+        sv_gt = None
+        
+        ref_len = len(rec.ref)
+        alt_len = len(rec.alts[0])
+        
+        sv_dict[str(sample) + "_" + str(count)] = struc_var(count, rec.chrom, sv_type, rec.pos, rec.stop, 
+                                                            sv_len, sv_gt, False, ref_len, alt_len, sample,
+                                                            ac = 1)
+        
+    f.close()
+    
+    return sv_dict
+
+def output_bed(sv_dict, bed_file):
+    with open(bed_file, 'w') as file:
+        # open file in read mode
+        f = open(ttmars_res, 'r')
+        
+        for line in f:
+            # print(line.split())
+            line_list = line.split()
+            idx = str(sample) + '_' + str(line_list[0])
+
+            # if a true call passed the filter
+            if idx in sv_dict and str(line_list[3]) == 'True':
+                file.write(str(line_list[4]) + '\t')
+                file.write(str(line_list[5]) + '\t')
+                file.write(str(line_list[6]) + '\t' + '\n')
+
+                if sv_dict[idx].sv_type == 'DEL': true_types_counter[0] += 1
+                elif sv_dict[idx].sv_type == 'INS': true_types_counter[1] += 1
+                elif sv_dict[idx].sv_type == 'DUP': true_types_counter[2] += 1
+        
+        # close the file
+        f.close()
