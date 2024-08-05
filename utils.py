@@ -1619,20 +1619,10 @@ def output_bed(sv_dict, bed_file):
         # open file in read mode
         f = open(ttmars_res, 'r')
         
-        for line in f:
-            # print(line.split())
-            line_list = line.split()
-            idx = str(sample) + '_' + str(line_list[0])
-
-            # if a true call passed the filter
-            if idx in sv_dict and str(line_list[3]) == 'True':
-                file.write(str(line_list[4]) + '\t')
-                file.write(str(line_list[5]) + '\t')
-                file.write(str(line_list[6]) + '\t' + '\n')
-
-                if sv_dict[idx].sv_type == 'DEL': true_types_counter[0] += 1
-                elif sv_dict[idx].sv_type == 'INS': true_types_counter[1] += 1
-                elif sv_dict[idx].sv_type == 'DUP': true_types_counter[2] += 1
+        for sv in sv_dict:
+            file.write(sv.ref_name + '\t')
+            file.write(sv.sv_pos + '\t')
+            file.write(sv.sv_stop + '\t' + '\n')
         
         # close the file
         f.close()

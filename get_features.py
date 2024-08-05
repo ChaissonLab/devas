@@ -41,20 +41,13 @@ def main():
 
     sv_dict = index_vcf(vcf_file, cur_valid_types)
     
-    # input SV coordinate
-    # truth_bed = f"/scratch1/jianzhiy/dl_cnv/run_ttmars/vali_delly_ins/{sample}/ttmars_combined_true_ins_50_500.bed"
-    truth_bed = truth_bed_part1 + sample + truth_bed_part2
-    truth_list = input_bed(truth_bed)
+    bed_file = working_dir + "/sv_bed_file.bed"
+    output_bed(sv_dict, bed_file)
+    sv_list = input_bed(bed_file)
     
-    get_features(x, y, truth_list, 1, bam, False)
+    get_features(x, y, sv_list, 1, bam, False)
     
-    # save training features
-    # x_file = f"/scratch1/jianzhiy/dl_cnv/training_features/delly/x_{sample}_cov_sc_del_kmer_insert_ins_50_500.txt"
-    x_file = x_file_part1 + sample + x_file_part2
-    # y_file = f"/scratch1/jianzhiy/dl_cnv/training_features/delly/y_{sample}_cov_sc_del_kmer_insert_ins_50_500.txt"
-    y_file = y_file_part1 + sample + y_file_part2
-    
-    with open(x_file, "w") as file_x, open(y_file, "w") as file_y:
+    with open(x_file, "w") as file_x:
         for i in range(len(x)):
             cur_x, cur_y = x[i], y[i]
     
@@ -67,11 +60,6 @@ def main():
             file_x.write("\n")
             for features in cur_x: file_x.write(f"{features[3]} ")
             file_x.write("\n")
-    
-            file_y.write(f"{cur_y} ")
-            file_y.write("\n")
-
-
 
 if __name__ == "__main__":
     main()
