@@ -37,7 +37,8 @@ flanking = 200
 flanking_ins = 500
 
 # ref fasta file
-fasta_file_path = "/scratch1/jianzhiy/svpred/reference/hg38.no_alts.fasta"
+fasta_file_path = "/project/mchaisso_100/datasets/1kg_phase3_related/GRCh38_full_analysis_set_plus_decoy_hla.fa"
+sample = "HG00"
 
 # no of features: cov, sc, insert size, 3mer emb
 no_features = 4
@@ -1616,13 +1617,8 @@ def index_vcf(vcf_file, cur_valid_types):
 
 def output_bed(sv_dict, bed_file):
     with open(bed_file, 'w') as file:
-        # open file in read mode
-        f = open(ttmars_res, 'r')
         
-        for sv in sv_dict:
+        for sv in sv_dict.values():
             file.write(sv.ref_name + '\t')
-            file.write(sv.sv_pos + '\t')
-            file.write(sv.sv_stop + '\t' + '\n')
-        
-        # close the file
-        f.close()
+            file.write(str(sv.sv_pos) + '\t')
+            file.write(str(sv.sv_stop) + '\t' + '\n')

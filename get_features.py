@@ -17,9 +17,12 @@ import os
 from utils import *
 
 def main():
+    parser = argparse.ArgumentParser(description="Args Parser")
+    
     parser.add_argument('-t', '--type', type=str, help='Type of SV', required=True)
     parser.add_argument('-v', '--vcf_file', type=str, help='Input vcf file', required=True)
     parser.add_argument('-b', '--bam_file', type=str, help='Bam file', required=True)
+    parser.add_argument('-r', '--ref_file', type=str, help='Reference file', required=True)
     parser.add_argument('-o', '--output_file', type=str, help='Output feature file', required=True)
     parser.add_argument('-d', '--working_dir', type=str, help='Working directory', required=True)
 
@@ -27,13 +30,19 @@ def main():
     args = parser.parse_args()
 
     cur_valid_types = args.type
-    vcf_file = args.type
+    vcf_file = args.vcf_file
     x_file = args.output_file
     working_dir = args.working_dir
+    reference_filename = args.ref_file
 
     # Extract features:
-    bam_file = args.bam
-    bam = pysam.AlignmentFile(bam_file, "rb")
+    bam_file = args.bam_file
+    
+    # bam = pysam.AlignmentFile(bam_file, "rb")
+
+    cram_file = bam_file
+    crai_file = cram_file + '.crai'
+    bam = pysam.AlignmentFile(cram_file, "rc", reference_filename = reference_filename, index_filename = crai_file)
     
     cur_min_len = 400
     cur_max_len = 2000
