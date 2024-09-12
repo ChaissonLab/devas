@@ -50,22 +50,6 @@ def encode_seq(input_seq, table, k):
 #read depth
 ###############################################
 #get read depth as an array for given positions
-def get_rd(bam, sv):
-    chr_name = sv.ref_name
-    sv_start = sv.sv_pos
-    sv_end = sv.sv_stop
-    
-    ref_name = chr_name
-    ref_start = sv_start
-    ref_end = sv_end
-
-    #note: bam.count_coverage will move the iterator to the end of ref_end
-    sv_cov = bam.count_coverage(ref_name, ref_start, ref_end)
-    sv_cov_mat = np.array(sv_cov)
-    sv_cov_linear = sv_cov_mat.sum(axis=0)
-
-    return sv_cov_linear
-
 #simulate read depth
 def simu_rd(same_len, lam, len_lb, len_up, avg_depth, depth_multi, chr_len):
     cur_start = 0

@@ -60,88 +60,14 @@ kmer_emb_size = 5
 
 # In[6]:
 
+nucs='ACGT'
 
 kmer_mapping = dict()
-kmer_mapping['AAA'] = 1
-kmer_mapping['AAG'] = 2
-kmer_mapping['AAC'] = 3
-kmer_mapping['AAT'] = 4
-
-kmer_mapping['AGA'] = 5
-kmer_mapping['AGG'] = 6
-kmer_mapping['AGC'] = 7
-kmer_mapping['AGT'] = 8
-
-kmer_mapping['ACA'] = 9
-kmer_mapping['ACG'] = 10
-kmer_mapping['ACC'] = 11
-kmer_mapping['ACT'] = 12
-
-kmer_mapping['ATA'] = 13
-kmer_mapping['ATG'] = 14
-kmer_mapping['ATC'] = 15
-kmer_mapping['ATT'] = 16
-
-kmer_mapping['GAA'] = 17
-kmer_mapping['GAG'] = 18
-kmer_mapping['GAC'] = 19
-kmer_mapping['GAT'] = 20
-
-kmer_mapping['GGA'] = 21
-kmer_mapping['GGG'] = 22
-kmer_mapping['GGC'] = 23
-kmer_mapping['GGT'] = 24
-
-kmer_mapping['GCA'] = 25
-kmer_mapping['GCG'] = 26
-kmer_mapping['GCC'] = 27
-kmer_mapping['GCT'] = 28
-
-kmer_mapping['GTA'] = 29
-kmer_mapping['GTG'] = 30
-kmer_mapping['GTC'] = 31
-kmer_mapping['GTT'] = 32
-
-kmer_mapping['CAA'] = 33
-kmer_mapping['CAG'] = 34
-kmer_mapping['CAC'] = 35
-kmer_mapping['CAT'] = 36
-
-kmer_mapping['CGA'] = 37
-kmer_mapping['CGG'] = 38
-kmer_mapping['CGC'] = 39
-kmer_mapping['CGT'] = 40
-
-kmer_mapping['CCA'] = 41
-kmer_mapping['CCG'] = 42
-kmer_mapping['CCC'] = 43
-kmer_mapping['CCT'] = 44
-
-kmer_mapping['CTA'] = 45
-kmer_mapping['CTG'] = 46
-kmer_mapping['CTC'] = 47
-kmer_mapping['CTT'] = 48
-
-kmer_mapping['TAA'] = 49
-kmer_mapping['TAG'] = 50
-kmer_mapping['TAC'] = 51
-kmer_mapping['TAT'] = 52
-
-kmer_mapping['TGA'] = 53
-kmer_mapping['TGG'] = 54
-kmer_mapping['TGC'] = 55
-kmer_mapping['TGT'] = 56
-
-kmer_mapping['TCA'] = 57
-kmer_mapping['TCG'] = 58
-kmer_mapping['TCC'] = 59
-kmer_mapping['TCT'] = 60
-
-kmer_mapping['TTA'] = 61
-kmer_mapping['TTG'] = 62
-kmer_mapping['TTC'] = 63
-kmer_mapping['TTT'] = 20
-
+for i in range(0,4):
+    for j in range(0,4):
+        for k in range(0,4):
+            kmer_mapping[nucs[i] + nucs[j] + nucs[k]] = i*16+j*4+k + 1
+            
 
 # In[7]:
 
@@ -966,98 +892,99 @@ def input_bed(bed_file):
     return lines
 
 ###########################################################################s
-# get read depth
 
-# get coverage of an entire interval
-def get_cov_int(bam, ref_name, start, end):
-    #note: bam.count_coverage will move the iterator to the end of end
-    sv_cov = bam.count_coverage(ref_name, start, end)
-    sv_cov_mat = torch.tensor(sv_cov)
-    sv_cov_linear = torch.sum(sv_cov_mat, 0)
 
-    return sv_cov_linear
 
-#get depth for a given pos, may not be useful
-def get_depth(ref_name, ref_pos, bam_file):
-    pos_str = ref_name + ':' + str(int(ref_pos) - 1) + '-' + str(ref_pos)
-    res = pysam.depth("-r", pos_str, bam_file)
-    if res=='':
-        return 0
-    start = 0
-    end = len(res) - 1
-    for i in range(len(res) - 1, -1, -1):
-        if res[i] == '\t':
-            start = i + 1
-            break
-    return int(res[start:end])
 
-#get read depth as an array for given positions
-def get_rd(bam, sv):
-    chr_name = sv.ref_name
-    sv_start = sv.sv_pos
-    sv_end = sv.sv_stop
-    
-    ref_name = chr_name
-    ref_start = sv_start
-    ref_end = sv_end
 
-    #note: bam.count_coverage will move the iterator to the end of ref_end
-    sv_cov = bam.count_coverage(ref_name, ref_start, ref_end)
-    sv_cov_mat = np.array(sv_cov)
-    sv_cov_linear = sv_cov_mat.sum(axis=0)
-
-    return sv_cov_linear
-
-############################################################################
-## get sc count
-
-#get the number of sc reads of a given interval
-def get_sc_ctr(ref, start, end, bam):
-    sc_ratio = 0.02
-    sc_ctr = 0
-
-    for read in bam.fetch(ref, start, end):
+#
+# Function to get soft-clipping, insert-size, and coverage.
+#
+def get_sc_ins_cov(bam, ref_name, ref_start, ref_end):
+    sc_stride = 25
+    refLen = ref_end - ref_start
+    nBins = int(refLen / 25)
+    if refLen % 25 != 0:
+        nBins +=1
+    sc_ratio=0.2
+    scBins = np.zeros(shape=nBins, dtype=int)
+    insertLen = np.zeros(shape=nBins, dtype=int)
+    insertCount= np.zeros(shape=nBins, dtype=int)
+    counter=  [0] * refLen
+    for read in bam.fetch(ref_name, ref_start, ref_end):
         cigar = read.cigartuples
         #not many reads are bad
         if not cigar:
             continue
 
+        # Handle the coverage counter.
+        alnStart=read.reference_start
+        alnEnd  = read.reference_end
+
+        if alnStart < ref_start:
+            counter[0] +=1
+        else:
+            counter[alnStart-ref_start]+=1
+        if alnEnd < ref_end:
+            counter[alnEnd - ref_start] -=1
+        
         #discard if hard clipped
         try:
             if cigar[0][0] == 5:
-                continue
-            elif cigar[-1][0] == 5:
-                continue
+                cigar.pop(0)
+            if len(cigar) > 0 and cigar[-1] == 5:
+                cigar.pop()
         except:
             continue
+        readLen = read.query_length
 
-        read_len = read.infer_query_length()
-        cur_sc_base = 0
-        if cigar[0][0] == 4:
-            cur_sc_base += cigar[0][1]
-        if cigar[-1][0] == 4:
-            cur_sc_base += cigar[-1][1]
 
-        if cur_sc_base / read_len >= sc_ratio:
-            sc_ctr += 1
+        if alnStart >= ref_start and len(cigar) > 0 and cigar[0][0] == 4 and cigar[0][1] / readLen > sc_ratio:
+            if alnStart >= ref_start:
+                startBin = int((alnStart - ref_start)  / sc_stride)
+                scBins[startBin] +=1
+        
+            
 
-    return sc_ctr
+        if alnEnd < ref_end and len(cigar) > 1 and cigar[-1][0] == 4 and cigar[-1][1] / readLen > sc_ratio:
+            endBin = int((alnEnd - ref_start)  / sc_stride)
+            if endBin > len(scBins):
+                print("ERROR SETTING BIN")
+            scBins[endBin] +=1
 
-#get sc reads ctr
-def get_sc(bam, ref_name, ref_start, ref_end):
-    sc_stride = 25
-    sv_sc = np.zeros(shape = (ref_end - ref_start))
+        insert_size = abs(read.template_length)  # Use abs to ensure the size is positive
+        startBin = int((alnStart - ref_start)/sc_stride)
+        endBin = int((alnStart - ref_start)/sc_stride) 
+        for b in range(startBin, endBin+1):
+            insertLen[b] += insert_size
+            insertCount[b] += 1
+             
 
-    for cur_start in range(ref_start, ref_end, sc_stride):
-        cur_sc_ctr = get_sc_ctr(ref_name, cur_start, cur_start + sc_stride, bam)
-
-        for i in range(cur_start - ref_start, min(cur_start + sc_stride - ref_start, ref_end - ref_start)):
-            sv_sc[i] = int(cur_sc_ctr)
+    sv_sc = np.zeros(shape = (ref_end - ref_start), dtype=int)
+    sv_insert = np.zeros(shape = (ref_end - ref_start), dtype=int)
+    for i in range(ref_start, ref_end):
+        sv_sc[i-ref_start] = scBins[ int(( i - ref_start) / sc_stride)]
+        insertBin = int((i - ref_start) / sc_stride)
+        if insertCount[insertBin] > 0:
+            sv_insert[i-ref_start] = int(insertLen[b] / insertCount[b])
+        else:
+            sv_insert[i-ref_start] = 0
             
     sv_sc = sv_sc.reshape(sv_sc.shape[0])
     sv_sc = torch.tensor(sv_sc)
 
-    return sv_sc
+    sv_insert=sv_insert.reshape(sv_insert.shape[0])
+    sv_insert=torch.tensor(sv_insert)
+
+    cov = np.zeros(shape = (ref_end - ref_start), dtype=int)
+    curCov=0
+
+    for c in range(0,len(counter)):
+        curCov += counter[c]
+        cov[c] = curCov
+
+    cov = torch.tensor(cov)
+    return sv_sc, sv_insert, cov
 
 ###########################################################################
 #return a simulated cn with a random locus and length
@@ -1261,13 +1188,15 @@ def min_max_normalize(feature):
 # In[ ]:
 
 
-def get_features(x, y, input_list, label, bam, reversed):
-    
+def get_features(fasta_file_path, x, y, input_list, label, bam, reversed):
+    idx=1
+    fasta_file = pysam.FastaFile(fasta_file_path)
     for call in input_list:
-        cov = get_cov_int(bam, call[0], int(call[1]) - flanking, int(call[2]) + flanking)
-        sc = get_sc(bam, call[0], int(call[1]) - flanking, int(call[2]) + flanking)
-        kmer_emb = get_kmer_emb(call[0], int(call[1]) - flanking, int(call[2]) + flanking)
-        insert_size = get_insert(bam, call[0], int(call[1]) - flanking, int(call[2]) + flanking)
+        print("Features for " + "\t".join(call)+ "\t" + str(idx)  + " of " + str(len(input_list)))
+        idx+=1
+        sc, insert_size, cov = get_sc_ins_cov(bam, call[0], int(call[1]) - flanking, int(int(call[2]) + flanking))
+        kmer_emb = get_kmer_emb(fasta_file, call[0], int(call[1]) - flanking, int(call[2]) + flanking)
+
 
         # filter crazy regions
         if cov.max() > cov_ub: continue
@@ -1297,43 +1226,6 @@ def get_features(x, y, input_list, label, bam, reversed):
 
 
 # In[ ]:
-
-
-def get_features_with_key(x, y, keys, rec, label, bam, reversed, key):
-    sample, ref, start, end = rec.sample, rec.ref_name, rec.sv_pos, rec.sv_stop
-    
-    cov = get_cov_int(bam, ref, int(start) - flanking, int(end) + flanking)
-    sc = get_sc(bam, ref, int(start) - flanking, int(end) + flanking)
-    kmer_emb = get_kmer_emb(call[0], int(call[1]) - flanking, int(call[2]) + flanking)
-    insert_size = get_insert(bam, call[0], int(call[1]) - flanking, int(call[2]) + flanking)
-    
-    # filter crazy regions
-    if cov.max() > cov_ub: return
-
-    if reversed:
-        cov = torch.flip(cov, [0])
-        sc = torch.flip(sc, [0])
-        kmer_emb = torch.flip(kmer_emb, [0])
-        insert_size = torch.flip(insert_size, [0])
-
-    # cov = min_max_normalize(cov)
-    # sc = min_max_normalize(sc)
-    
-    feature = torch.stack((cov, sc, kmer_emb, insert_size), dim = 0) 
-    
-    padding_size = max_len + 2 * flanking - cov.size(0)
-    feature_padded = F.pad(feature, (0, padding_size), 'constant', 0)
-    #truncate cov_padded
-    # feature_padded = torch.clamp(feature_padded, max = cov_ub)
-    feature_padded = feature_padded.permute(1, 0)
-
-    x.append(feature_padded.tolist())
-    y.append(label)
-
-    keys.append(key)
-
-
-# In[16]:
 
 
 def get_word2vec_emb(kmer_emb_int, Word2Vec_model):
@@ -1470,7 +1362,7 @@ def get_saved_features_with_keys(x, y, keys, rec, label, reversed, key, Word2Vec
 
 def get_insert(bam, ref_name, ref_start, ref_end):
     insert_stride = 25
-    insert_size = np.zeros(shape = (ref_end - ref_start))
+    insert_size = np.zeros(shape = (ref_end - ref_start), dtype=int)
 
     for cur_start in range(ref_start, ref_end, insert_stride):
         cur_insert_size = get_insert_ctr(ref_name, cur_start, cur_start + insert_stride, bam)
@@ -1503,16 +1395,13 @@ def  get_insert_ctr(ref, start, end, bam):
 
 # get local 3-mer embedding features
 
-def get_kmer_emb(ref_name, ref_start, ref_end):
+def get_kmer_emb(fasta_file, ref_name, ref_start, ref_end):
     k = 3
-    kmer_emb = np.zeros(shape = (ref_end - ref_start))
-
-    for cur in range(ref_start, ref_end):
-        kmer = extract_kmer_from_reference(ref_name, cur - 1, k)
-        emb = emb_kmer(kmer)
-        kmer_emb[cur - ref_start] = emb
-
-    kmer_emb = kmer_emb.reshape(kmer_emb.shape[0])
+    kmer_emb = np.zeros(shape = (ref_end - ref_start), dtype=int)
+    # todo check errors past the end of a chromosome
+    seq = fasta_file.fetch(ref_name, ref_start, ref_end + k - 1)
+    kmer_emb = [emb_kmer(seq[i:i+k]) for i in range(0,ref_end - ref_start)]
+#    kmer_emb = kmer_emb.reshape(kmer_emb.shape[0])
     kmer_emb = torch.tensor(kmer_emb)
 
     return kmer_emb
@@ -1575,7 +1464,6 @@ def index_vcf(vcf_file, cur_valid_types):
         try:
             sv_type = rec.info['SVTYPE']
         except:
-            print("invalid sv type info")
             continue
     
         #get sv length
@@ -1583,25 +1471,29 @@ def index_vcf(vcf_file, cur_valid_types):
             sv_len = abs(rec.stop - rec.pos + 1)
         else:
             try:
-                sv_len = rec.info['SVLEN'][0]
+                sv_len = abs(rec.info['SVLEN'][0])
             except:
                 try:
-                    sv_len = rec.info['SVLEN']
+                    sv_len = abs(rec.info['SVLEN'])
                 except:
                     sv_len = abs(rec.stop - rec.pos + 1)
 
-        if sv_type not in cur_valid_types: continue
+
+        if sv_type not in cur_valid_types:
+            continue
 
         if sv_type == "INS": cur_min_len, cur_max_len = 50, 500
         elif sv_type == "DEL": cur_min_len, cur_max_len = 400, 2000
-        elif sv_type == "DUP": cur_min_len, cur_max_len = 400, 2000
+        elif sv_type == "DUP" or sv_type == "CNV": cur_min_len, cur_max_len = 400, 2000
         elif sv_type == "INV": cur_min_len, cur_max_len = 50, 2000
         
-        if sv_len < cur_min_len or sv_len > cur_max_len: continue
-            
+        if sv_len < cur_min_len or sv_len > cur_max_len:
+            continue
+        
         if filters(rec, sv_type, True, sv_len):
             continue
-    
+
+        print("Adding var " + str(rec.chrom) + " " + str(sv_type) +  " " + str(rec.pos) + " to db")
         sv_gt = None
         
         ref_len = len(rec.ref)

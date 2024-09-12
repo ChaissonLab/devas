@@ -16,19 +16,7 @@ import os
 
 from utils import *
 
-def main():
-    parser = argparse.ArgumentParser(description="Args Parser")
-    
-    parser.add_argument('-t', '--type', type=str, help='Type of SV', required=True)
-    parser.add_argument('-v', '--vcf_file', type=str, help='Input vcf file', required=True)
-    parser.add_argument('-b', '--bam_file', type=str, help='Bam file', required=True)
-    parser.add_argument('-r', '--ref_file', type=str, help='Reference file', required=True)
-    parser.add_argument('-o', '--output_file', type=str, help='Output feature file', required=True)
-    parser.add_argument('-d', '--working_dir', type=str, help='Working directory', required=True)
-
-    # Parse the arguments
-    args = parser.parse_args()
-
+def main(args):
     cur_valid_types = args.type
     vcf_file = args.vcf_file
     x_file = args.output_file
@@ -54,7 +42,7 @@ def main():
     output_bed(sv_dict, bed_file)
     sv_list = input_bed(bed_file)
     
-    get_features(x, y, sv_list, 1, bam, False)
+    get_features(reference_filename, x, y, sv_list, 1, bam, False)
     
     with open(x_file, "w") as file_x:
         for i in range(len(x)):
@@ -71,4 +59,16 @@ def main():
             file_x.write("\n")
 
 if __name__ == "__main__":
-    main()
+    parser = argparse.ArgumentParser(description="Args Parser")
+    
+    parser.add_argument('-t', '--type', type=str, help='Type of SV', required=True)
+    parser.add_argument('-v', '--vcf_file', type=str, help='Input vcf file', required=True)
+    parser.add_argument('-b', '--bam_file', type=str, help='Bam file', required=True)
+    parser.add_argument('-r', '--ref_file', type=str, help='Reference file', required=True)
+    parser.add_argument('-o', '--output_file', type=str, help='Output feature file', required=True)
+    parser.add_argument('-d', '--working_dir', type=str, help='Working directory', required=True)
+
+    # Parse the arguments
+    args = parser.parse_args()
+    
+    main(args)
